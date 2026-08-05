@@ -1,150 +1,187 @@
-# Issue Prediction - Catch deployment errors before they happen
+# 🛡️ Issue Prediction
 
-A web application that analyzes your project files and catches deployment errors before they reach production.
+> **Catch deployment errors before they reach production.**  
+> An intelligent pre-deployment analyzer that executes your project code in isolated sandboxes and uses Groq AI to detect, explain, and recommend fixes for deployment issues.
 
-## Features
+---
 
-- **Upload & Analyze**: Upload your project as a zip file for comprehensive analysis
-- **Real Execution**: Runs actual deployment commands in isolated Docker containers
-- **AI-Powered Analysis**: Uses Groq AI to explain errors in plain English
-- **Multi-Language Support**: Supports Python, Node.js, Docker, and docker-compose projects
-- **Environment Variable Detection**: Identifies missing environment variables
-- **Cross-File Analysis**: Detects configuration mismatches across files
+## 🌟 Key Features
 
-## Quick Start
+- 📦 **Automated Zip Analysis**: Upload project archives (`.zip`) for instant pre-flight validation.
+- 🐳 **Isolated Container Sandbox**: Runs real build and dependency commands inside lightweight, restricted Docker containers.
+- 🤖 **AI-Powered Diagnostics**: Integrated with **Groq AI** to translate complex build traces into human-readable root causes and actionable solutions.
+- 🔍 **Cross-File Configuration Checking**: Detects mismatches across Dockerfiles, docker-compose configurations, and source files.
+- 🔑 **Environment Variable Audit**: Scans code for environment variable references and checks against `.env` declarations.
+- ⚡ **Multi-Ecosystem Support**: Validates Python (`pip`), Node.js (`npm`), Docker, and Docker Compose applications.
 
-### Prerequisites
+---
 
-- Docker and Docker Compose installed
-- Groq API key (for AI analysis)
+## 🏗️ Architecture
 
-### Setup
+```mermaid
+flowchart LR
+    subgraph Client Layer
+        UI[Web Dashboard\nNginx :3000]
+    end
 
-1. **Clone the repository**:
-   ```bash
-   git clone <repository-url>
-   cd issuse_prediction
-   ```
+    subgraph API Layer
+        API[FastAPI Service\nUvicorn :8000]
+        AUTH[JWT Authentication]
+        DB[(SQLite / PostgreSQL)]
+    end
 
-2. **Set up environment variables**:
-   ```bash
-   # Create .env file for docker-compose
-   echo "GROQ_API_KEY=your_api_key_here" > .env
-   ```
+    subgraph Execution & AI
+        DS[(Docker Engine)]
+        SB[Isolated Container Sandbox]
+        AI[Groq Llama 3 AI Engine]
+    end
 
-3. **Build and run the application**:
-   ```bash
-   docker-compose up --build
-   ```
+    UI -->|Upload Zip / Auth| API
+    API <--> DB
+    API <--> AUTH
+    API -->|Mount & Run| DS
+    DS --> SB
+    API -->|Logs & Context| AI
+```
 
-4. **Access the application**:
-   - Frontend: http://localhost:3000
-   - Backend API: http://localhost:8000
+---
 
-### Try with Sample Project
+## 🚀 Quick Start
 
-A sample project with intentional errors is included in the `sample_project/` directory:
+### 📋 Prerequisites
 
-1. **Create a zip file**:
+- **Docker & Docker Compose** (version 2.0+)
+- **Groq API Key** (Free key available at [console.groq.com](https://console.groq.com))
+
+---
+
+### 📥 1. Clone & Set Up Environment
+
+```bash
+# Clone the repository
+git clone https://github.com/dinu-vishruth/issue_prediction.git
+cd issue_prediction
+
+# Create environment configuration file
+cp .env.example .env
+```
+
+Edit `.env` to configure your credentials:
+```env
+GROQ_API_KEY=your_groq_api_key_here
+JWT_SECRET=your_super_secret_jwt_key
+```
+
+---
+
+### 🐳 2. Run with Docker Compose
+
+```bash
+docker-compose up --build
+```
+
+Access the application services:
+- 🌐 **Web Interface**: [http://localhost:3000](http://localhost:3000)
+- 📚 **API Documentation (Swagger)**: [http://localhost:8000/docs](http://localhost:8000/docs)
+- 🏥 **Health Check Endpoint**: [http://localhost:8000/health](http://localhost:8000/health)
+
+To run in the background (detached mode):
+```bash
+docker-compose up -d --build
+```
+
+To stop all running services:
+```bash
+docker-compose down -v
+```
+
+---
+
+## 🧪 Testing with the Sample Project
+
+The repository includes a pre-configured sample project with intentional errors (`sample_project/`):
+
+1. **Package the sample project**:
    ```bash
    cd sample_project
    zip -r ../sample_project.zip .
    cd ..
    ```
 
-2. **Upload the zip file** to the web interface at http://localhost:3000
+2. **Upload `sample_project.zip`** at [http://localhost:3000](http://localhost:3000).
 
-## Supported Files
+### Detected Intentional Errors:
+1. ❌ **Non-existent package** in `requirements.txt`
+2. 🔑 **Missing environment variables** (`DB_PASSWORD`, `REDIS_URL`)
+3. 🔌 **Port mismatch** between `Dockerfile` (8000) and `docker-compose.yml` (5000)
+4. ⚠️ **Missing environment setting** (`POSTGRES_PASSWORD`) in `docker-compose.yml`
 
-The application analyzes the following files:
+---
 
-- `requirements.txt` - Python dependencies
-- `package.json` - Node.js dependencies
-- `Dockerfile` - Docker build configuration
-- `docker-compose.yml` - Docker Compose configuration
-- `.env` - Environment variables
+## 🛠️ Ecosystem Analysis Engine
 
-## What Gets Analyzed
+| Project Type | Analyzed File | Verification Executed |
+| :--- | :--- | :--- |
+| **Python** | `requirements.txt` | `pip install --dry-run`, `pip check` |
+| **Node.js** | `package.json` | `npm install --dry-run`, `npm ls` |
+| **Docker** | `Dockerfile` | `docker build --no-cache` |
+| **Docker Compose** | `docker-compose.yml` | `docker-compose config` |
+| **Env Variables** | `.env`, `.py`, `.js` | Static AST / Regex scan for missing definitions |
 
-### Python Projects
-- `pip install --dry-run` - Checks dependency installation
-- `pip check` - Verifies dependency conflicts
+---
 
-### Node.js Projects
-- `npm install --dry-run` - Checks dependency installation
-- `npm ls` - Lists installed packages
+## 🔒 Security & Sandbox Guarantees
 
-### Docker Projects
-- `docker build . --no-cache` - Validates Dockerfile syntax and build process
+All user-submitted code is isolated using strict Docker container constraints:
 
-### Docker Compose Projects
-- `docker-compose config` - Validates compose file syntax
+- 🧱 **Read-Only Mounts**: Source code is mounted read-only during execution.
+- ⚡ **Resource Restrictions**: Hard limits enforced per analysis run (`512MB RAM`, `0.5 CPU cores`).
+- 🌐 **Network Isolation**: Disables external internet access during command execution.
+- ⏱️ **Execution Timeouts**: Prevents infinite loops or hung processes (30-second default limit).
+- 🧹 **Automatic Cleanup**: Containers and temporary working directories are purged immediately post-analysis.
 
-### Environment Variables
-- Scans `.py` and `.js` files for environment variable usage
-- Compares with `.env` file to detect missing variables
-- Reports configuration mismatches
+---
 
-## API Endpoints
+## 💻 Local Development Setup
 
-### POST /upload
-Upload and analyze a zip file.
-
-**Request**: Multipart form data with file field
-**Response**: JSON with analysis results including:
-- Files detected
-- Commands executed
-- Raw output
-- Issues found (with AI explanations)
-
-### GET /health
-Health check endpoint.
-
-## Security Features
-
-- **Isolated Execution**: All user code runs in isolated Docker containers
-- **Resource Limits**: Containers have memory (512MB) and CPU (0.5 cores) limits
-- **Network Isolation**: No internet access during analysis
-- **Read-Only Mounts**: User files are mounted read-only
-- **Auto-Cleanup**: Containers and temporary files are automatically removed
-
-## Development
-
-### Backend Development
+### Backend (FastAPI)
 
 ```bash
 cd backend
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
-uvicorn main:app --reload
+export GROQ_API_KEY="your_groq_api_key_here"
+export JWT_SECRET="your_custom_secret"
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-### Frontend Development
+### Sandbox Image (Required for local backend runs)
+```bash
+docker build -t deploycheck-sandbox -f Dockerfile.sandbox .
+```
 
-The frontend is a single HTML file. Simply open `frontend/index.html` in a browser or serve it with any web server.
+### Frontend (Static Web Server)
+```bash
+cd frontend
+python3 -m http.server 3000
+```
 
-## Sample Project Errors
+---
 
-The included `sample_project/` contains these intentional errors:
+## 🛰️ API Reference
 
-1. **Non-existent package** in requirements.txt
-2. **Missing environment variables** (DB_PASSWORD, REDIS_URL)
-3. **Port mismatch** in Dockerfile vs docker-compose
-4. **Missing POSTGRES_PASSWORD** in docker-compose
+### `POST /upload`
+Upload and analyze a project ZIP file.
+- **Request**: `multipart/form-data` with `file` field (.zip format)
+- **Response**: JSON payload containing detected files, raw output logs, detected issues, and AI recommendations.
 
-These demonstrate the types of issues DeployCheck can detect and explain.
+### `GET /health`
+Returns backend operational status and Docker daemon availability.
+- **Response**: `{"status": "healthy", "docker_available": true}`
 
-## Troubleshooting
+---
 
-### Docker Issues
-- Ensure Docker is running and accessible
-- Check that `/var/run/docker.sock` is accessible to the backend container
+## 📄 License
 
-### API Key Issues
-- Verify GROQ_API_KEY is set correctly
-- Get free API key from console.groq.com
-
-### Frontend Issues
-- Ensure backend is running on port 8000
-- Check browser console for JavaScript errors
-
-
+Distributed under the MIT License. See `LICENSE` for more information.
