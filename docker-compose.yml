@@ -1,0 +1,28 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - deploycheck-network
+    restart: unless-stopped
+
+  frontend:
+    image: nginx:alpine
+    ports:
+      - "3000:80"
+    volumes:
+      - ./frontend/index.html:/usr/share/nginx/html/index.html:ro
+    networks:
+      - deploycheck-network
+    restart: unless-stopped
+    depends_on:
+      - backend
+
+networks:
+  deploycheck-network:
+    driver: bridge

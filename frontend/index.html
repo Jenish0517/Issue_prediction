@@ -1,0 +1,1707 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Issuse Prediction - Catch deployment errors before they happen</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #050a0f;
+            --glass-bg: rgba(255, 255, 255, 0.03);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --accent-blue: #0ea5e9;
+            --accent-blue-glow: rgba(14, 165, 233, 0.3);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --critical: #f43f5e;
+            --text-primary: #f0f9ff;
+            --text-secondary: #64748b;
+        }
+
+        body {
+            font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .gradient-mesh {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .gradient-mesh::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: 
+                radial-gradient(ellipse at 20% 20%, rgba(14, 165, 233, 0.15) 0%, transparent 50%),
+                radial-gradient(ellipse at 80% 80%, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
+                radial-gradient(ellipse at 40% 60%, rgba(16, 185, 129, 0.08) 0%, transparent 50%);
+            animation: gradientMove 20s ease-in-out infinite;
+        }
+
+        @keyframes gradientMove {
+            0%, 100% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(2%, 2%) rotate(5deg); }
+            50% { transform: translate(-1%, 3%) rotate(-3deg); }
+            75% { transform: translate(3%, -2%) rotate(2deg); }
+        }
+
+        .dot-grid {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+            background-size: 24px 24px;
+            pointer-events: none;
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--accent-blue);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #0284c7;
+        }
+
+        ::selection {
+            background: var(--accent-blue);
+            color: white;
+        }
+
+        *:focus {
+            outline: none;
+        }
+
+        *:focus-visible {
+            outline: 2px solid var(--accent-blue);
+            outline-offset: 2px;
+        }
+
+        .navbar {
+            background: rgba(5, 10, 15, 0.8);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 1rem 2rem;
+            border-bottom: 1px solid transparent;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            animation: slideDown 0.5s ease-out;
+        }
+
+        .navbar::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, var(--accent-blue), transparent);
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-100%);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .navbar-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .logo {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-email {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, var(--accent-blue), #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: white;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        .glass-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .glass-card:hover {
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .btn {
+            background: linear-gradient(135deg, var(--accent-blue), #0284c7);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 10px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn:hover {
+            transform: scale(1.02);
+            box-shadow: 0 8px 25px var(--accent-blue-glow);
+        }
+
+        .btn:active {
+            transform: scale(0.97);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn:disabled::before {
+            display: none;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.85rem;
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, var(--critical), #e11d48);
+        }
+
+        .btn-danger:hover {
+            box-shadow: 0 8px 25px rgba(244, 63, 94, 0.3);
+        }
+
+        .auth-screen {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: calc(100vh - 80px);
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .auth-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 20px;
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 420px;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .auth-card:hover {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 40px rgba(14, 165, 233, 0.1);
+        }
+
+        .auth-logo {
+            text-align: center;
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--accent-blue), #8b5cf6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 2rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+
+        .auth-tabs {
+            display: flex;
+            margin-bottom: 2rem;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .auth-tab {
+            flex: 1;
+            padding: 1rem;
+            text-align: center;
+            cursor: pointer;
+            color: var(--text-secondary);
+            transition: all 0.3s ease;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .auth-tab::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: var(--accent-blue);
+            transform: scaleX(0);
+            transition: transform 0.3s ease;
+        }
+
+        .auth-tab.active {
+            color: var(--accent-blue);
+        }
+
+        .auth-tab.active::after {
+            transform: scaleX(1);
+        }
+
+        .auth-form {
+            display: none;
+        }
+
+        .auth-form.active {
+            display: block;
+            animation: fadeIn 0.3s ease;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        .form-group {
+            margin-bottom: 1.25rem;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            color: var(--text-primary);
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            font-family: 'Plus Jakarta Sans', sans-serif;
+        }
+
+        .form-group input:focus {
+            border-color: var(--accent-blue);
+            box-shadow: 0 0 20px rgba(14, 165, 233, 0.2);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .form-group input:focus + label {
+            color: var(--accent-blue);
+        }
+
+        .error-message {
+            color: var(--critical);
+            font-size: 0.85rem;
+            margin-top: 1rem;
+            text-align: center;
+            display: none;
+            padding: 0.75rem;
+            background: rgba(244, 63, 94, 0.1);
+            border-radius: 8px;
+            border: 1px solid rgba(244, 63, 94, 0.2);
+        }
+
+        .dashboard-screen {
+            display: none;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .dashboard-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+        }
+
+        .dashboard-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+        }
+
+        .stats-row {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+            animation: fadeInUp 0.5s ease-out;
+            animation-fill-mode: both;
+        }
+
+        .stat-card:nth-child(1) { animation-delay: 0.1s; border-top: 3px solid var(--accent-blue); }
+        .stat-card:nth-child(2) { animation-delay: 0.2s; border-top: 3px solid var(--critical); }
+        .stat-card:nth-child(3) { animation-delay: 0.3s; border-top: 3px solid var(--warning); }
+        .stat-card:nth-child(4) { animation-delay: 0.4s; border-top: 3px solid var(--success); }
+
+        .stat-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+        }
+
+        .stat-value {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .stat-critical { color: var(--critical); }
+        .stat-warning { color: var(--warning); }
+        .stat-info { color: var(--accent-blue); }
+        .stat-success { color: var(--success); }
+
+        .analyses-table {
+            width: 100%;
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            overflow: hidden;
+            animation: fadeInUp 0.5s ease-out 0.5s;
+            animation-fill-mode: both;
+        }
+
+        .analyses-table th,
+        .analyses-table td {
+            padding: 1rem 1.5rem;
+            text-align: left;
+            border-bottom: 1px solid var(--glass-border);
+        }
+
+        .analyses-table th {
+            background: rgba(255, 255, 255, 0.02);
+            font-weight: 600;
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .analyses-table tr {
+            transition: all 0.2s ease;
+        }
+
+        .analyses-table tbody tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+
+        .analysis-screen {
+            display: none;
+            animation: fadeInUp 0.3s ease-out;
+        }
+
+        .back-button {
+            margin-bottom: 2rem;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .upload-section {
+            text-align: center;
+            padding: 3rem 0;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .upload-area {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 2px dashed var(--glass-border);
+            border-radius: 16px;
+            padding: 3rem;
+            margin: 2rem 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .upload-area::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.05), transparent);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .upload-area:hover {
+            border-color: var(--accent-blue);
+            transform: scale(1.01);
+        }
+
+        .upload-area:hover::before {
+            opacity: 1;
+        }
+
+        .upload-area.dragover {
+            border-color: var(--accent-blue);
+            background: rgba(14, 165, 233, 0.1);
+            transform: scale(1.02);
+        }
+
+        .upload-icon {
+            font-size: 3.5rem;
+            margin-bottom: 1rem;
+            animation: bounce 2s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .upload-text {
+            font-size: 1.2rem;
+            font-weight: 500;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .upload-subtext {
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .supported-files {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--glass-border);
+            border-radius: 10px;
+            padding: 1rem;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .supported-files strong {
+            color: var(--accent-blue);
+        }
+
+        .loading-section {
+            display: none;
+            text-align: center;
+            padding: 4rem 0;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .spinner {
+            width: 60px;
+            height: 60px;
+            border: 3px solid rgba(255, 255, 255, 0.1);
+            border-top: 3px solid var(--accent-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 2rem;
+            box-shadow: 0 0 30px var(--accent-blue-glow);
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status-message {
+            font-size: 1.1rem;
+            color: var(--accent-blue);
+            font-weight: 500;
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .results-section {
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+
+        .summary-bar {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+            display: flex;
+            justify-content: space-around;
+            flex-wrap: wrap;
+            gap: 1.5rem;
+        }
+
+        .summary-item {
+            text-align: center;
+        }
+
+        .summary-number {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2.2rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .summary-label {
+            color: var(--text-secondary);
+            font-size: 0.85rem;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .critical { color: var(--critical); }
+        .warning { color: var(--warning); }
+        .passed { color: var(--success); }
+        .info { color: var(--accent-blue); }
+
+        .issues-container {
+            margin-bottom: 2rem;
+        }
+
+        .issue-card {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            border-left: 4px solid;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .issue-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            opacity: 0.5;
+        }
+
+        .issue-card:hover {
+            background: rgba(255, 255, 255, 0.05);
+            transform: translateX(5px);
+        }
+
+        .issue-card.critical {
+            border-left-color: var(--critical);
+            box-shadow: -5px 0 20px rgba(244, 63, 94, 0.1);
+        }
+
+        .issue-card.critical::before {
+            background: var(--critical);
+            box-shadow: -5px 0 30px rgba(244, 63, 94, 0.3);
+        }
+
+        .issue-card.warning {
+            border-left-color: var(--warning);
+            box-shadow: -5px 0 20px rgba(245, 158, 11, 0.1);
+        }
+
+        .issue-card.warning::before {
+            background: var(--warning);
+            box-shadow: -5px 0 30px rgba(245, 158, 11, 0.3);
+        }
+
+        .issue-card.info {
+            border-left-color: var(--success);
+            box-shadow: -5px 0 20px rgba(16, 185, 129, 0.1);
+        }
+
+        .issue-card.info::before {
+            background: var(--success);
+            box-shadow: -5px 0 30px rgba(16, 185, 129, 0.3);
+        }
+
+        .issue-card:hover::before {
+            opacity: 1;
+        }
+
+        .issue-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            color: var(--text-primary);
+        }
+
+        .issue-explanation {
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            line-height: 1.6;
+        }
+
+        .issue-fix {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--glass-border);
+            padding: 1rem;
+            border-radius: 8px;
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 0.85rem;
+            margin-bottom: 0.75rem;
+            color: #e2e8f0;
+            position: relative;
+        }
+
+        .issue-file {
+            display: inline-block;
+            background: rgba(14, 165, 233, 0.15);
+            color: var(--accent-blue);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            border: 1px solid rgba(14, 165, 233, 0.3);
+        }
+
+        .commands-section {
+            margin-top: 2rem;
+        }
+
+        .commands-header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            padding: 1rem 1.5rem;
+            border-radius: 12px 12px 0 0;
+            cursor: pointer;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            user-select: none;
+            transition: all 0.3s ease;
+        }
+
+        .commands-header:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .commands-content {
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--glass-border);
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease;
+        }
+
+        .commands-content.expanded {
+            max-height: 1000px;
+            overflow-y: auto;
+        }
+
+        .command-output {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--glass-border);
+            font-family: 'Plus Jakarta Sans', monospace;
+            font-size: 0.85rem;
+        }
+
+        .command-output:last-child {
+            border-bottom: none;
+        }
+
+        .command-title {
+            color: var(--accent-blue);
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .command-text {
+            color: var(--text-secondary);
+            margin-bottom: 0.5rem;
+        }
+
+        .output-text {
+            white-space: pre-wrap;
+            color: #e2e8f0;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 0.75rem;
+            border-radius: 6px;
+            max-height: 200px;
+            overflow-y: auto;
+            font-size: 0.8rem;
+            border: 1px solid var(--glass-border);
+        }
+
+        .error {
+            color: var(--critical);
+        }
+
+        .success {
+            color: var(--success);
+        }
+
+        .arrow {
+            transition: transform 0.3s ease;
+        }
+
+        .arrow.expanded {
+            transform: rotate(180deg);
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state svg {
+            width: 120px;
+            height: 120px;
+            margin-bottom: 1.5rem;
+            opacity: 0.5;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 1rem;
+            }
+
+            .stats-row {
+                grid-template-columns: 1fr;
+            }
+
+            .dashboard-header {
+                flex-direction: column;
+                gap: 1rem;
+                align-items: flex-start;
+            }
+
+            .analyses-table {
+                font-size: 0.85rem;
+            }
+
+            .analyses-table th,
+            .analyses-table td {
+                padding: 0.75rem 1rem;
+            }
+
+            .summary-bar {
+                flex-direction: column;
+            }
+
+            .auth-card {
+                padding: 2rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="gradient-mesh"></div>
+    <div class="dot-grid"></div>
+
+    <nav class="navbar" id="navbar" style="display: none;">
+        <div class="navbar-content">
+            <div class="logo">🚀 Issuse Prediction</div>
+            <div class="navbar-right">
+                <div class="user-avatar" id="userAvatar">U</div>
+                <span class="user-email" id="userEmail"></span>
+                <button class="btn btn-secondary btn-small" id="logoutBtn">Logout</button>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <div class="auth-screen" id="authScreen">
+            <div class="auth-card">
+                <div class="auth-logo">🚀 Issuse Prediction</div>
+                <div class="auth-tabs">
+                    <div class="auth-tab active" id="loginTab">Login</div>
+                    <div class="auth-tab" id="registerTab">Register</div>
+                </div>
+                
+                <form class="auth-form active" id="loginForm">
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="loginEmail" required placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="loginPassword" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">Login</button>
+                    <div class="error-message" id="loginError"></div>
+                </form>
+                
+                <form class="auth-form" id="registerForm">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="registerName" placeholder="John Doe">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="registerEmail" required placeholder="you@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label>Password</label>
+                        <input type="password" id="registerPassword" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn" style="width: 100%;">Register</button>
+                    <div class="error-message" id="registerError"></div>
+                </form>
+            </div>
+        </div>
+
+        <div class="dashboard-screen" id="dashboardScreen">
+            <div class="dashboard-header">
+                <h1 class="dashboard-title">Dashboard</h1>
+                <button class="btn" id="newAnalysisBtn">✨ New Analysis</button>
+            </div>
+            
+            <div class="stats-row">
+                <div class="stat-card">
+                    <div class="stat-value stat-info" id="totalAnalyses">0</div>
+                    <div class="stat-label">Total Analyses</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-critical" id="totalCritical">0</div>
+                    <div class="stat-label">Critical Issues</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-warning" id="totalWarnings">0</div>
+                    <div class="stat-label">Warnings</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value stat-success" id="memberSince">-</div>
+                    <div class="stat-label">Member Since</div>
+                </div>
+            </div>
+            
+            <h2 style="margin-bottom: 1rem; font-family: 'Space Grotesk', sans-serif; font-size: 1.3rem;">Recent Analyses</h2>
+            <table class="analyses-table">
+                <thead>
+                    <tr>
+                        <th>Filename</th>
+                        <th>Date</th>
+                        <th>Critical</th>
+                        <th>Warning</th>
+                        <th>Passed</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="analysesTableBody">
+                </tbody>
+            </table>
+        </div>
+
+        <div class="analysis-screen" id="analysisScreen">
+            <button class="btn btn-secondary back-button" id="backToDashboardBtn">← Back to Dashboard</button>
+            
+            <div class="upload-section" id="uploadSection">
+                <div class="upload-area" id="uploadArea">
+                    <div class="upload-icon">📁</div>
+                    <div class="upload-text">Drop your project zip here or click to browse</div>
+                    <div class="upload-subtext">Maximum file size: 50MB</div>
+                </div>
+                <input type="file" id="fileInput" class="file-input" accept=".zip">
+                
+                <div class="supported-files">
+                    <strong>Supported files:</strong> requirements.txt, package.json, Dockerfile, docker-compose.yml, .env
+                </div>
+                
+                <button class="btn" id="analyzeBtn" disabled>🔍 Analyze Deployment</button>
+            </div>
+
+            <div class="loading-section" id="loadingSection">
+                <div class="spinner"></div>
+                <div class="status-message" id="statusMessage">Initializing...</div>
+            </div>
+
+            <div class="results-section" id="resultsSection">
+                <div class="summary-bar" id="summaryBar">
+                </div>
+
+                <div class="issues-container" id="issuesContainer">
+                </div>
+
+                <div class="commands-section">
+                    <div class="commands-header" id="commandsHeader">
+                        <span>📋 Commands Run</span>
+                        <span class="arrow" id="commandsArrow">▼</span>
+                    </div>
+                    <div class="commands-content" id="commandsContent">
+                    </div>
+                </div>
+
+                <div style="text-align: center; margin-top: 2rem;">
+                    <button class="btn" id="downloadReportBtn">📥 Download Report</button>
+                    <button class="btn btn-secondary" id="analyzeAnotherBtn">🔄 Analyze Another Project</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let selectedFile = null;
+        let analysisResult = null;
+        let authToken = localStorage.getItem('authToken');
+        let currentUser = JSON.parse(localStorage.getItem('currentUser') || 'null');
+
+        const authScreen = document.getElementById('authScreen');
+        const dashboardScreen = document.getElementById('dashboardScreen');
+        const analysisScreen = document.getElementById('analysisScreen');
+        const navbar = document.getElementById('navbar');
+        const userEmail = document.getElementById('userEmail');
+        const userAvatar = document.getElementById('userAvatar');
+        const logoutBtn = document.getElementById('logoutBtn');
+        
+        const loginTab = document.getElementById('loginTab');
+        const registerTab = document.getElementById('registerTab');
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const loginError = document.getElementById('loginError');
+        const registerError = document.getElementById('registerError');
+        
+        const newAnalysisBtn = document.getElementById('newAnalysisBtn');
+        const analysesTableBody = document.getElementById('analysesTableBody');
+        
+        const backToDashboardBtn = document.getElementById('backToDashboardBtn');
+        const uploadArea = document.getElementById('uploadArea');
+        const fileInput = document.getElementById('fileInput');
+        const analyzeBtn = document.getElementById('analyzeBtn');
+        const uploadSection = document.getElementById('uploadSection');
+        const loadingSection = document.getElementById('loadingSection');
+        const resultsSection = document.getElementById('resultsSection');
+        const statusMessage = document.getElementById('statusMessage');
+        const summaryBar = document.getElementById('summaryBar');
+        const issuesContainer = document.getElementById('issuesContainer');
+        const commandsHeader = document.getElementById('commandsHeader');
+        const commandsContent = document.getElementById('commandsContent');
+        const commandsArrow = document.getElementById('commandsArrow');
+        const analyzeAnotherBtn = document.getElementById('analyzeAnotherBtn');
+        const downloadReportBtn = document.getElementById('downloadReportBtn');
+
+        function init() {
+            if (authToken && currentUser) {
+                showDashboard();
+            } else {
+                showAuth();
+            }
+        }
+
+        function showAuth() {
+            authScreen.style.display = 'flex';
+            dashboardScreen.style.display = 'none';
+            analysisScreen.style.display = 'none';
+            navbar.style.display = 'none';
+        }
+
+        function showDashboard() {
+            authScreen.style.display = 'none';
+            dashboardScreen.style.display = 'block';
+            analysisScreen.style.display = 'none';
+            navbar.style.display = 'block';
+            userEmail.textContent = currentUser.email;
+            userAvatar.textContent = currentUser.email.charAt(0).toUpperCase();
+            loadDashboard();
+        }
+
+        function showAnalysis(viewOnly = false) {
+            authScreen.style.display = 'none';
+            dashboardScreen.style.display = 'none';
+            analysisScreen.style.display = 'block';
+            navbar.style.display = 'block';
+            
+            const uploadSectionEl = document.getElementById('uploadSection');
+            const loadingSectionEl = document.getElementById('loadingSection');
+            const resultsSectionEl = document.getElementById('resultsSection');
+            const uploadAreaEl = document.getElementById('uploadArea');
+            const fileInputEl = document.getElementById('fileInput');
+            const analyzeBtnEl = document.getElementById('analyzeBtn');
+            
+            if (uploadSectionEl) uploadSectionEl.style.display = 'none';
+            if (loadingSectionEl) loadingSectionEl.style.display = 'none';
+            if (resultsSectionEl) resultsSectionEl.style.display = 'none';
+            
+            if (viewOnly) {
+                if (resultsSectionEl) resultsSectionEl.style.display = 'block';
+            } else {
+                if (uploadSectionEl) uploadSectionEl.style.display = 'block';
+                selectedFile = null;
+                if (analyzeBtnEl) analyzeBtnEl.disabled = true;
+                
+                if (uploadAreaEl) {
+                    uploadAreaEl.innerHTML = `
+                        <div class="upload-icon">📁</div>
+                        <div class="upload-text">Drop your project zip here or click to browse</div>
+                        <div class="upload-subtext">Maximum file size: 50MB</div>
+                    `;
+                }
+                
+                if (fileInputEl) fileInputEl.value = '';
+            }
+        }
+
+        loginTab.addEventListener('click', () => {
+            loginTab.classList.add('active');
+            registerTab.classList.remove('active');
+            loginForm.classList.add('active');
+            registerForm.classList.remove('active');
+        });
+
+        registerTab.addEventListener('click', () => {
+            registerTab.classList.add('active');
+            loginTab.classList.remove('active');
+            registerForm.classList.add('active');
+            loginForm.classList.remove('active');
+        });
+
+        loginForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            loginError.style.display = 'none';
+            
+            const email = document.getElementById('loginEmail').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            try {
+                const response = await fetch('http://localhost:8000/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Login failed');
+                }
+                
+                const data = await response.json();
+                authToken = data.access_token;
+                currentUser = data.user;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                showDashboard();
+                
+            } catch (error) {
+                loginError.textContent = error.message;
+                loginError.style.display = 'block';
+            }
+        });
+
+        registerForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            registerError.style.display = 'none';
+            
+            const email = document.getElementById('registerEmail').value;
+            const password = document.getElementById('registerPassword').value;
+            const full_name = document.getElementById('registerName').value;
+            
+            try {
+                const response = await fetch('http://localhost:8000/auth/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password, full_name })
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Registration failed');
+                }
+                
+                const loginResponse = await fetch('http://localhost:8000/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email, password })
+                });
+                
+                const data = await loginResponse.json();
+                authToken = data.access_token;
+                currentUser = data.user;
+                localStorage.setItem('authToken', authToken);
+                localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                showDashboard();
+                
+            } catch (error) {
+                registerError.textContent = error.message;
+                registerError.style.display = 'block';
+            }
+        });
+
+        logoutBtn.addEventListener('click', () => {
+            authToken = null;
+            currentUser = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('currentUser');
+            showAuth();
+        });
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('http://localhost:8000/dashboard', {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load dashboard');
+                }
+                
+                const data = await response.json();
+                
+                animateCounter('totalAnalyses', data.total_analyses);
+                animateCounter('totalCritical', data.total_critical);
+                animateCounter('totalWarnings', data.total_warnings);
+                
+                if (data.member_since) {
+                    document.getElementById('memberSince').textContent = new Date(data.member_since).toLocaleDateString();
+                }
+                
+                analysesTableBody.innerHTML = '';
+                if (data.recent_analyses.length === 0) {
+                    analysesTableBody.innerHTML = `
+                        <tr>
+                            <td colspan="6" style="text-align: center; padding: 3rem;">
+                                <div class="empty-state">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                        <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                    <p>No analyses yet. Start by uploading a project!</p>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                } else {
+                    data.recent_analyses.forEach(analysis => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${analysis.filename}</td>
+                            <td>${new Date(analysis.uploaded_at).toLocaleString()}</td>
+                            <td style="color: var(--critical); font-weight: 600;">${analysis.critical_count}</td>
+                            <td style="color: var(--warning); font-weight: 600;">${analysis.warning_count}</td>
+                            <td style="color: var(--success); font-weight: 600;">${analysis.passed_count}</td>
+                            <td>
+                                <button class="btn btn-small" onclick="loadAnalysis(${analysis.id})">View</button>
+                                <button class="btn btn-small btn-danger" onclick="deleteAnalysis(${analysis.id})">Delete</button>
+                            </td>
+                        `;
+                        analysesTableBody.appendChild(row);
+                    });
+                }
+                
+            } catch (error) {
+                console.error('Dashboard error:', error);
+                if (error.message.includes('401')) {
+                    showAuth();
+                }
+            }
+        }
+
+        function animateCounter(elementId, targetValue) {
+            const element = document.getElementById(elementId);
+            const duration = 1000;
+            const startValue = 0;
+            const startTime = performance.now();
+            
+            function update(currentTime) {
+                const elapsed = currentTime - startTime;
+                const progress = Math.min(elapsed / duration, 1);
+                const easeOutQuart = 1 - Math.pow(1 - progress, 4);
+                const currentValue = Math.floor(startValue + (targetValue - startValue) * easeOutQuart);
+                element.textContent = currentValue;
+                
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+            
+            requestAnimationFrame(update);
+        }
+
+        async function loadAnalysis(analysisId) {
+            try {
+                const response = await fetch(`http://localhost:8000/analyses/${analysisId}`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to load analysis');
+                }
+                
+                const data = await response.json();
+                analysisResult = data;
+                showAnalysis(true);
+                displayResults(data);
+                
+            } catch (error) {
+                console.error('Load analysis error:', error);
+                alert('Failed to load analysis');
+            }
+        }
+
+        async function deleteAnalysis(analysisId) {
+            if (!confirm('Are you sure you want to delete this analysis?')) return;
+            
+            try {
+                const response = await fetch(`http://localhost:8000/analyses/${analysisId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to delete analysis');
+                }
+                
+                loadDashboard();
+                
+            } catch (error) {
+                console.error('Delete analysis error:', error);
+                alert('Failed to delete analysis');
+            }
+        }
+
+        newAnalysisBtn.addEventListener('click', () => {
+            showAnalysis(false);
+            resetAnalysis();
+        });
+        backToDashboardBtn.addEventListener('click', showDashboard);
+
+        uploadArea.addEventListener('click', () => fileInput.click());
+        
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            
+            const files = e.dataTransfer.files;
+            if (files.length > 0 && files[0].type === 'application/zip') {
+                handleFileSelect(files[0]);
+            } else {
+                alert('Please upload a zip file');
+            }
+        });
+
+        fileInput.addEventListener('change', (e) => {
+            if (e.target.files.length > 0) {
+                handleFileSelect(e.target.files[0]);
+            }
+        });
+
+        function handleFileSelect(file) {
+            if (file.size > 50 * 1024 * 1024) {
+                alert('File size must be less than 50MB');
+                return;
+            }
+            
+            selectedFile = file;
+            analyzeBtn.disabled = false;
+            uploadArea.innerHTML = `
+                <div class="upload-icon">✅</div>
+                <div class="upload-text">${file.name}</div>
+                <div class="upload-subtext">${(file.size / 1024 / 1024).toFixed(2)} MB</div>
+            `;
+        }
+
+        analyzeBtn.addEventListener('click', analyzeDeployment);
+        analyzeAnotherBtn.addEventListener('click', () => {
+            resetAnalysis();
+        });
+        downloadReportBtn.addEventListener('click', downloadReport);
+        commandsHeader.addEventListener('click', () => {
+            commandsContent.classList.toggle('expanded');
+            commandsArrow.classList.toggle('expanded');
+        });
+
+        async function analyzeDeployment() {
+            if (!selectedFile) return;
+
+            uploadSection.style.display = 'none';
+            loadingSection.style.display = 'block';
+            resultsSection.style.display = 'none';
+
+            const statusMessages = [
+                'Extracting files...',
+                'Running sandbox commands...',
+                'Checking environment variables...',
+                'AI analysis...'
+            ];
+
+            let messageIndex = 0;
+            const messageInterval = setInterval(() => {
+                if (messageIndex < statusMessages.length) {
+                    statusMessage.textContent = statusMessages[messageIndex];
+                    messageIndex++;
+                }
+            }, 2000);
+
+            try {
+                const formData = new FormData();
+                formData.append('file', selectedFile);
+
+                const headers = {};
+                if (authToken) {
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                }
+
+                const response = await fetch('http://localhost:8000/upload', {
+                    method: 'POST',
+                    headers: headers,
+                    body: formData
+                });
+
+                clearInterval(messageInterval);
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.detail || 'Analysis failed');
+                }
+
+                const result = await response.json();
+                analysisResult = result;
+                displayResults(result);
+
+            } catch (error) {
+                clearInterval(messageInterval);
+                statusMessage.textContent = `Error: ${error.message}`;
+                
+                setTimeout(() => {
+                    resetAnalysis();
+                }, 3000);
+            }
+        }
+
+        function displayResults(result) {
+            loadingSection.style.display = 'none';
+            resultsSection.style.display = 'block';
+
+            const summary = result.summary;
+            summaryBar.innerHTML = `
+                <div class="summary-item">
+                    <div class="summary-number critical">${summary.critical}</div>
+                    <div class="summary-label">Critical</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number warning">${summary.warning}</div>
+                    <div class="summary-label">Warning</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number passed">${result.commands_run.filter(c => c.success).length}</div>
+                    <div class="summary-label">Passed</div>
+                </div>
+                <div class="summary-item">
+                    <div class="summary-number info">${result.files_detected.file_count}</div>
+                    <div class="summary-label">Files</div>
+                </div>
+            `;
+
+            issuesContainer.innerHTML = '';
+            if (result.issues.length === 0) {
+                issuesContainer.innerHTML = `
+                    <div class="issue-card info">
+                        <div class="issue-title">🎉 No Issues Found</div>
+                        <div class="issue-explanation">Your project looks ready for deployment!</div>
+                    </div>
+                `;
+            } else {
+                result.issues.forEach(issue => {
+                    const issueCard = document.createElement('div');
+                    issueCard.className = `issue-card ${issue.severity}`;
+                    
+                    const fileBadge = issue.file ? `<span class="issue-file">${issue.file}</span>` : '';
+                    
+                    issueCard.innerHTML = `
+                        <div class="issue-title">${issue.title}</div>
+                        <div class="issue-explanation">${issue.explanation}</div>
+                        <div class="issue-fix">${issue.fix}</div>
+                        ${fileBadge}
+                    `;
+                    
+                    issuesContainer.appendChild(issueCard);
+                });
+            }
+
+            commandsContent.innerHTML = '';
+            result.raw_output.forEach(cmd => {
+                const commandDiv = document.createElement('div');
+                commandDiv.className = 'command-output';
+                
+                const successClass = cmd.exit_code === 0 ? 'success' : 'error';
+                const statusIcon = cmd.exit_code === 0 ? '✅' : '❌';
+                
+                commandDiv.innerHTML = `
+                    <div class="command-title">${statusIcon} ${cmd.command}</div>
+                    <div class="command-text">Exit code: ${cmd.exit_code}</div>
+                    ${cmd.stdout ? `<div class="output-text">${cmd.stdout}</div>` : ''}
+                    ${cmd.stderr ? `<div class="output-text error">${cmd.stderr}</div>` : ''}
+                `;
+                
+                commandsContent.appendChild(commandDiv);
+            });
+        }
+
+        function resetAnalysis() {
+            uploadSection.style.display = 'block';
+            loadingSection.style.display = 'none';
+            resultsSection.style.display = 'none';
+            
+            selectedFile = null;
+            analyzeBtn.disabled = true;
+            
+            uploadArea.innerHTML = `
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Drop your project zip here or click to browse</div>
+                <div class="upload-subtext">Maximum file size: 50MB</div>
+            `;
+            
+            fileInput.value = '';
+        }
+
+        async function downloadReport() {
+            if (!analysisResult) return;
+            
+            const reportContent = generateHTMLReport(analysisResult);
+            const blob = new Blob([reportContent], { type: 'text/html' });
+            const url = URL.createObjectURL(blob);
+            
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'issuse-prediction-report.html';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        function generateHTMLReport(result) {
+            const issuesHTML = result.issues.map(issue => `
+                <div style="border-left: 4px solid ${issue.severity === 'critical' ? '#f43f5e' : issue.severity === 'warning' ? '#f59e0b' : '#10b981'}; padding: 1rem; margin-bottom: 1rem; background: #f5f5f5;">
+                    <h3 style="margin: 0 0 0.5rem 0;">${issue.title}</h3>
+                    <p style="margin: 0 0 0.5rem 0;">${issue.explanation}</p>
+                    <pre style="background: #333; color: #fff; padding: 0.5rem; border-radius: 4px; overflow-x: auto;">${issue.fix}</pre>
+                    ${issue.file ? `<small style="color: #666;">File: ${issue.file}</small>` : ''}
+                </div>
+            `).join('');
+
+            return `
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Issuse Prediction Report</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 2rem; background: #f5f5f5; }
+        .summary { display: flex; gap: 2rem; background: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; }
+        .summary-item { text-align: center; }
+        .summary-number { font-size: 2rem; font-weight: bold; }
+        .critical { color: #f43f5e; }
+        .warning { color: #f59e0b; }
+        .passed { color: #10b981; }
+    </style>
+</head>
+<body>
+    <h1>Issuse Prediction Analysis Report</h1>
+    <p>Generated on: ${new Date().toLocaleString()}</p>
+    
+    <div class="summary">
+        <div class="summary-item">
+            <div class="summary-number critical">${result.summary.critical}</div>
+            <div>Critical</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number warning">${result.summary.warning}</div>
+            <div>Warning</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number passed">${result.commands_run.filter(c => c.success).length}</div>
+            <div>Passed</div>
+        </div>
+        <div class="summary-item">
+            <div class="summary-number">${result.files_detected.file_count}</div>
+            <div>Files</div>
+        </div>
+    </div>
+    
+    <h2>Issues Found</h2>
+    ${issuesHTML || '<p>No issues found!</p>'}
+    
+    <h2>Commands Run</h2>
+    ${result.raw_output.map(cmd => `
+        <div style="background: white; padding: 1rem; margin-bottom: 0.5rem; border-radius: 4px;">
+            <strong>${cmd.command}</strong> - Exit code: ${cmd.exit_code}<br>
+            ${cmd.stdout ? `<pre>${cmd.stdout}</pre>` : ''}
+            ${cmd.stderr ? `<pre style="color: #f43f5e;">${cmd.stderr}</pre>` : ''}
+        </div>
+    `).join('')}
+</body>
+</html>
+            `;
+        }
+
+        init();
+    </script>
+</body>
+</html>
