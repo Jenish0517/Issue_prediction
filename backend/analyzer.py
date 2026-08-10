@@ -42,7 +42,7 @@ Respond in this exact JSON format:
 
         try:
             response = self.client.chat.completions.create(
-                model="moonshotai/kimi-k2-instruct",
+                model="llama-3.3-70b-versatile",
                 max_tokens=1000,
                 messages=[{
                     "role": "user",
@@ -110,7 +110,7 @@ Return empty array [] if no cross-file issues found."""
 
         try:
             response = self.client.chat.completions.create(
-                model="moonshotai/kimi-k2-instruct",
+                model="llama-3.3-70b-versatile",
                 max_tokens=2000,
                 messages=[{
                     "role": "user",

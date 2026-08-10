@@ -123,11 +123,12 @@ class FileHandler:
                     with open(file_path, 'r', encoding='utf-8') as f:
                         content = f.read()
                         
-                        # Check Python files for os.environ.get() usage
+                        # Check Python files for os.getenv, os.environ.get, or os.environ[...]
                         if file.endswith('.py'):
                             import re
-                            matches = re.findall(r'os\.environ\.get\([\'"]([^\'"]+)[\'"]', content)
-                            for match in matches:
+                            matches = re.findall(r'(?:os\.environ\.get|os\.getenv)\([\'"]([^\'"]+)[\'"]', content)
+                            matches.extend(re.findall(r'os\.environ\[[\'"]([^\'"]+)[\'"]\]', content))
+                            for match in set(matches):
                                 env_usage['python'].append({
                                     'file': relative_path,
                                     'var': match

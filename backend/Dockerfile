@@ -3,9 +3,10 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including Docker CLI for container management
 RUN apt-get update && apt-get install -y \
     curl \
+    docker.io \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy requirements and install Python dependencies
@@ -15,10 +16,6 @@ RUN pip install --no-cache-dir --default-timeout=1000 --retries 20 -r requiremen
 
 # Copy application code
 COPY . .
-
-# Create non-root user
-RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
-USER appuser
 
 # Expose port
 EXPOSE 8000

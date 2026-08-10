@@ -64,15 +64,15 @@ class Executor:
         results = []
         
         try:
-            # Use standard python:3.11-slim image instead of custom sandbox
-            sandbox_image = "python:3.11-slim"
-            
-            # Pull the image if not exists
-            if not self._ensure_image_exists(sandbox_image):
-                return {
-                    "success": False,
-                    "error": "Failed to pull Docker image"
-                }
+            # Prefer custom deploycheck-sandbox image (has Node.js, npm, gcc & Python), fallback to python:3.11-slim
+            sandbox_image = "deploycheck-sandbox"
+            if not self._check_image_exists_locally(sandbox_image):
+                sandbox_image = "python:3.11-slim"
+                if not self._ensure_image_exists(sandbox_image):
+                    return {
+                        "success": False,
+                        "error": "Failed to pull fallback Docker image (python:3.11-slim)"
+                    }
             
             # Execute commands based on project types
             if 'python' in project_types:
@@ -98,17 +98,24 @@ class Executor:
                 "error": f"Execution failed: {str(e)}"
             }
     
-    def _ensure_image_exists(self, image_name: str) -> bool:
-        """Ensure Docker image exists, pull if not"""
+    def _check_image_exists_locally(self, image_name: str) -> bool:
+        """Check if Docker image exists locally without pulling"""
         try:
-            # Check if image exists locally
             result = subprocess.run(
                 [self.docker_command, 'images', '-q', image_name],
                 capture_output=True,
                 text=True,
                 timeout=10
             )
-            if result.returncode == 0 and result.stdout.strip():
+            return result.returncode == 0 and bool(result.stdout.strip())
+        except Exception:
+            return False
+
+    def _ensure_image_exists(self, image_name: str) -> bool:
+        """Ensure Docker image exists, pull if not"""
+        try:
+            # Check if image exists locally
+            if self._check_image_exists_locally(image_name):
                 return True
             
             # Pull the image
@@ -216,7 +223,8 @@ class Executor:
         """Execute docker-compose commands"""
         results = []
         
-        cmd = f"{self.docker_command}-compose config"
+        # Try docker compose first (Docker CLI v2), fallback to docker-compose
+        cmd = f"{self.docker_command} compose config"
         
         try:
             start_time = time.time()
@@ -228,6 +236,17 @@ class Executor:
                 timeout=60,
                 cwd=temp_dir
             )
+            # If docker compose is not recognized, try docker-compose
+            if result.returncode != 0 and ("not a docker command" in result.stderr or "is not a docker command" in result.stderr):
+                cmd = f"{self.docker_command}-compose config"
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    cwd=temp_dir
+                )
             duration = int((time.time() - start_time) * 1000)
             
             results.append({
