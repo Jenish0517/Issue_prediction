@@ -1159,6 +1159,10 @@
         }
 
         function showDashboard() {
+            if (!currentUser || !currentUser.email) {
+                showAuth();
+                return;
+            }
             authScreen.style.display = 'none';
             dashboardScreen.style.display = 'block';
             analysisScreen.style.display = 'none';
@@ -1276,9 +1280,13 @@
                     body: JSON.stringify({ email, password })
                 });
                 
-                const data = await loginResponse.json();
-                authToken = data.access_token;
-                currentUser = data.user;
+                const loginData = await loginResponse.json();
+                if (!loginResponse.ok) {
+                    throw new Error(loginData.detail || 'Auto-login failed after registration');
+                }
+                
+                authToken = loginData.access_token;
+                currentUser = loginData.user;
                 localStorage.setItem('authToken', authToken);
                 localStorage.setItem('currentUser', JSON.stringify(currentUser));
                 showDashboard();

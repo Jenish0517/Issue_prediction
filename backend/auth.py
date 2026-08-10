@@ -126,7 +126,7 @@ def register(user: UserRegister):
             "id": db_user["id"],
             "email": db_user["email"],
             "full_name": db_user["full_name"],
-            "created_at": db_user["created_at"]
+            "created_at": str(db_user["created_at"]) if db_user["created_at"] else None
         }
 
 @router.post("/login", response_model=Token)
@@ -163,7 +163,7 @@ def login(user_credentials: UserLogin):
                 "id": user["id"],
                 "email": user["email"],
                 "full_name": user["full_name"],
-                "created_at": user["created_at"]
+                "created_at": str(user["created_at"]) if user["created_at"] else None
             }
         }
 
