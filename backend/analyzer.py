@@ -63,7 +63,7 @@ Respond in this exact JSON format:
                     raise ValueError("No JSON found in response")
             except json.JSONDecodeError as e:
                 return {
-                    "error": f"Failed to parse Claude response: {e}",
+                    "error": f"Failed to parse Groq response: {e}",
                     "severity": "warning",
                     "title": "Analysis Error",
                     "explanation": "Could not analyze the error automatically",
@@ -73,7 +73,7 @@ Respond in this exact JSON format:
                 
         except Exception as e:
             return {
-                "error": f"Claude API error: {e}",
+                "error": f"Groq API error: {e}",
                 "severity": "warning",
                 "title": "API Error",
                 "explanation": "Failed to analyze error with AI",
