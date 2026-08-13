@@ -159,6 +159,48 @@ class FileHandler:
         
         return env_usage
     
+    def check_missing_project_files(self, directory: str, file_paths: Dict[str, str]) -> List[Dict[str, Any]]:
+        """Detect missing package.json or requirements.txt when source files exist in a directory"""
+        issues = []
+        js_dirs = set()
+        py_dirs = set()
+        
+        for rel_path in file_paths.keys():
+            ext = os.path.splitext(rel_path)[1].lower()
+            rel_dir = os.path.dirname(rel_path)
+            if ext in ('.js', '.ts', '.jsx', '.tsx') and not rel_path.startswith('node_modules'):
+                js_dirs.add(rel_dir)
+            elif ext == '.py':
+                py_dirs.add(rel_dir)
+                
+        for j_dir in js_dirs:
+            pkg_file = os.path.join(directory, j_dir, 'package.json') if j_dir else os.path.join(directory, 'package.json')
+            root_pkg = os.path.join(directory, 'package.json')
+            if not os.path.exists(pkg_file) and not os.path.exists(root_pkg):
+                dir_label = f"in '{j_dir}/'" if j_dir else "in root directory"
+                issues.append({
+                    "severity": "critical",
+                    "title": f"Missing package.json {dir_label}",
+                    "explanation": f"JavaScript/TypeScript source files were found {dir_label}, but no package.json file exists to define project dependencies.",
+                    "fix": f"Add a package.json file {dir_label} specifying required dependencies.",
+                    "file": os.path.join(j_dir, 'package.json') if j_dir else 'package.json'
+                })
+
+        for p_dir in py_dirs:
+            req_file = os.path.join(directory, p_dir, 'requirements.txt') if p_dir else os.path.join(directory, 'requirements.txt')
+            root_req = os.path.join(directory, 'requirements.txt')
+            if not os.path.exists(req_file) and not os.path.exists(root_req):
+                dir_label = f"in '{p_dir}/'" if p_dir else "in root directory"
+                issues.append({
+                    "severity": "warning",
+                    "title": f"Missing requirements.txt {dir_label}",
+                    "explanation": f"Python source files were found {dir_label}, but no requirements.txt file exists to define dependencies.",
+                    "fix": f"Add a requirements.txt file {dir_label} specifying required Python packages.",
+                    "file": os.path.join(p_dir, 'requirements.txt') if p_dir else 'requirements.txt'
+                })
+
+        return issues
+
     def cleanup(self):
         """Clean up temporary directory"""
         if self.temp_dir and os.path.exists(self.temp_dir):

@@ -117,6 +117,10 @@ async def upload_and_analyze(
         env_usage = file_handler.find_env_usage_in_code(temp_dir)
         env_issues = analyzer.analyze_env_var_mismatch(env_vars, env_usage)
         
+        # Check for missing project manifest files (package.json / requirements.txt)
+        missing_manifest_issues = file_handler.check_missing_project_files(temp_dir, file_paths)
+        all_issues.extend(missing_manifest_issues)
+
         # Analyze individual command results
         for result in command_results:
             issue = analyzer.analyze_command_result(

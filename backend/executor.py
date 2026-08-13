@@ -135,7 +135,7 @@ class Executor:
         """Execute Python-related commands"""
         results = []
         
-        req_dirs = [""]
+        req_dirs = []
         if file_paths:
             found_dirs = set()
             for rel_path in file_paths.keys():
@@ -143,6 +143,8 @@ class Executor:
                     found_dirs.add(os.path.dirname(rel_path))
             if found_dirs:
                 req_dirs = sorted(list(found_dirs))
+        elif os.path.exists(os.path.join(temp_dir, 'requirements.txt')):
+            req_dirs = [""]
 
         commands = [
             "pip install -r requirements.txt --dry-run",
@@ -167,7 +169,7 @@ class Executor:
         """Execute Node.js-related commands"""
         results = []
         
-        pkg_dirs = [""]
+        pkg_dirs = []
         if file_paths:
             found_dirs = set()
             for rel_path in file_paths.keys():
@@ -175,6 +177,8 @@ class Executor:
                     found_dirs.add(os.path.dirname(rel_path))
             if found_dirs:
                 pkg_dirs = sorted(list(found_dirs))
+        elif os.path.exists(os.path.join(temp_dir, 'package.json')):
+            pkg_dirs = [""]
 
         commands = [
             "npm install --dry-run",
@@ -199,7 +203,7 @@ class Executor:
         """Execute Docker build commands"""
         results = []
         
-        docker_dirs = [""]
+        docker_dirs = []
         if file_paths:
             found_dirs = set()
             for rel_path in file_paths.keys():
@@ -207,6 +211,8 @@ class Executor:
                     found_dirs.add(os.path.dirname(rel_path))
             if found_dirs:
                 docker_dirs = sorted(list(found_dirs))
+        elif os.path.exists(os.path.join(temp_dir, 'Dockerfile')):
+            docker_dirs = [""]
 
         for rel_dir in docker_dirs:
             build_cwd = os.path.join(temp_dir, rel_dir) if rel_dir else temp_dir
@@ -255,7 +261,7 @@ class Executor:
         """Execute docker-compose commands"""
         results = []
         
-        compose_dirs = [""]
+        compose_dirs = []
         if file_paths:
             found_dirs = set()
             for rel_path in file_paths.keys():
@@ -263,6 +269,8 @@ class Executor:
                     found_dirs.add(os.path.dirname(rel_path))
             if found_dirs:
                 compose_dirs = sorted(list(found_dirs))
+        elif os.path.exists(os.path.join(temp_dir, 'docker-compose.yml')) or os.path.exists(os.path.join(temp_dir, 'docker-compose.yaml')):
+            compose_dirs = [""]
 
         for rel_dir in compose_dirs:
             compose_cwd = os.path.join(temp_dir, rel_dir) if rel_dir else temp_dir
