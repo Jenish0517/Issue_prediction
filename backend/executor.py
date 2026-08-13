@@ -326,9 +326,9 @@ class Executor:
             # Convert Windows path to Docker volume path format
             if os.name == 'nt':  # Windows
                 volume_path = volume_path.replace('\\', '/')
-                volume_mount = f"{volume_path}:/app:ro"
+                volume_mount = f"{volume_path}:/app:rw"
             else:
-                volume_mount = f"{volume_path}:/app:ro"
+                volume_mount = f"{volume_path}:/app:rw"
             
             # Build docker run command
             docker_cmd = [
