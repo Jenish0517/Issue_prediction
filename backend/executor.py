@@ -76,16 +76,16 @@ class Executor:
             
             # Execute commands based on project types
             if 'python' in project_types:
-                results.extend(self._execute_python_commands(temp_dir, sandbox_image))
+                results.extend(self._execute_python_commands(temp_dir, sandbox_image, file_paths))
             
             if 'nodejs' in project_types:
-                results.extend(self._execute_nodejs_commands(temp_dir, sandbox_image))
+                results.extend(self._execute_nodejs_commands(temp_dir, sandbox_image, file_paths))
             
             if 'docker' in project_types:
-                results.extend(self._execute_docker_commands(temp_dir))
+                results.extend(self._execute_docker_commands(temp_dir, file_paths))
             
             if 'compose' in project_types:
-                results.extend(self._execute_compose_commands(temp_dir))
+                results.extend(self._execute_compose_commands(temp_dir, file_paths))
             
             return {
                 "success": True,
@@ -131,148 +131,190 @@ class Executor:
             print(f"Failed to ensure image exists: {e}")
             return False
     
-    def _execute_python_commands(self, temp_dir: str, sandbox_image: str) -> List[Dict[str, Any]]:
+    def _execute_python_commands(self, temp_dir: str, sandbox_image: str, file_paths: Dict[str, str] = None) -> List[Dict[str, Any]]:
         """Execute Python-related commands"""
         results = []
         
+        req_dirs = [""]
+        if file_paths:
+            found_dirs = set()
+            for rel_path in file_paths.keys():
+                if os.path.basename(rel_path) == 'requirements.txt':
+                    found_dirs.add(os.path.dirname(rel_path))
+            if found_dirs:
+                req_dirs = sorted(list(found_dirs))
+
         commands = [
             "pip install -r requirements.txt --dry-run",
             "pip check"
         ]
         
-        for cmd in commands:
-            result = self._run_in_container(
-                image=sandbox_image,
-                command=cmd,
-                volume_path=temp_dir,
-                workdir="/app"
-            )
-            result["command"] = cmd
-            results.append(result)
+        for rel_dir in req_dirs:
+            workdir = f"/app/{rel_dir}".rstrip("/") if rel_dir else "/app"
+            for cmd in commands:
+                result = self._run_in_container(
+                    image=sandbox_image,
+                    command=cmd,
+                    volume_path=temp_dir,
+                    workdir=workdir
+                )
+                result["command"] = f"{cmd} (in {rel_dir or '.'})" if rel_dir else cmd
+                results.append(result)
         
         return results
     
-    def _execute_nodejs_commands(self, temp_dir: str, sandbox_image: str) -> List[Dict[str, Any]]:
+    def _execute_nodejs_commands(self, temp_dir: str, sandbox_image: str, file_paths: Dict[str, str] = None) -> List[Dict[str, Any]]:
         """Execute Node.js-related commands"""
         results = []
         
+        pkg_dirs = [""]
+        if file_paths:
+            found_dirs = set()
+            for rel_path in file_paths.keys():
+                if os.path.basename(rel_path) == 'package.json':
+                    found_dirs.add(os.path.dirname(rel_path))
+            if found_dirs:
+                pkg_dirs = sorted(list(found_dirs))
+
         commands = [
             "npm install --dry-run",
             "npm ls"
         ]
         
-        for cmd in commands:
-            result = self._run_in_container(
-                image=sandbox_image,
-                command=cmd,
-                volume_path=temp_dir,
-                workdir="/app"
-            )
-            result["command"] = cmd
-            results.append(result)
+        for rel_dir in pkg_dirs:
+            workdir = f"/app/{rel_dir}".rstrip("/") if rel_dir else "/app"
+            for cmd in commands:
+                result = self._run_in_container(
+                    image=sandbox_image,
+                    command=cmd,
+                    volume_path=temp_dir,
+                    workdir=workdir
+                )
+                result["command"] = f"{cmd} (in {rel_dir or '.'})" if rel_dir else cmd
+                results.append(result)
         
         return results
     
-    def _execute_docker_commands(self, temp_dir: str) -> List[Dict[str, Any]]:
+    def _execute_docker_commands(self, temp_dir: str, file_paths: Dict[str, str] = None) -> List[Dict[str, Any]]:
         """Execute Docker build commands"""
         results = []
         
-        # Docker build needs to be run on the host, not in a container
-        cmd = f"{self.docker_command} build {temp_dir} --no-cache"
-        
-        try:
-            start_time = time.time()
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                cwd=temp_dir
-            )
-            duration = int((time.time() - start_time) * 1000)
+        docker_dirs = [""]
+        if file_paths:
+            found_dirs = set()
+            for rel_path in file_paths.keys():
+                if os.path.basename(rel_path) == 'Dockerfile':
+                    found_dirs.add(os.path.dirname(rel_path))
+            if found_dirs:
+                docker_dirs = sorted(list(found_dirs))
+
+        for rel_dir in docker_dirs:
+            build_cwd = os.path.join(temp_dir, rel_dir) if rel_dir else temp_dir
+            cmd = f"{self.docker_command} build {build_cwd} --no-cache"
             
-            results.append({
-                "command": cmd,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "exit_code": result.returncode,
-                "duration_ms": duration
-            })
-            
-        except subprocess.TimeoutExpired:
-            results.append({
-                "command": cmd,
-                "stdout": "",
-                "stderr": "Command timed out after 60 seconds",
-                "exit_code": -1,
-                "duration_ms": 60000
-            })
-        except Exception as e:
-            results.append({
-                "command": cmd,
-                "stdout": "",
-                "stderr": f"Failed to run command: {str(e)}",
-                "exit_code": -1,
-                "duration_ms": 0
-            })
-        
-        return results
-    
-    def _execute_compose_commands(self, temp_dir: str) -> List[Dict[str, Any]]:
-        """Execute docker-compose commands"""
-        results = []
-        
-        # Try docker compose first (Docker CLI v2), fallback to docker-compose
-        cmd = f"{self.docker_command} compose config"
-        
-        try:
-            start_time = time.time()
-            result = subprocess.run(
-                cmd,
-                shell=True,
-                capture_output=True,
-                text=True,
-                timeout=60,
-                cwd=temp_dir
-            )
-            # If docker compose is not recognized, try docker-compose
-            if result.returncode != 0 and ("not a docker command" in result.stderr or "is not a docker command" in result.stderr):
-                cmd = f"{self.docker_command}-compose config"
+            try:
+                start_time = time.time()
                 result = subprocess.run(
                     cmd,
                     shell=True,
                     capture_output=True,
                     text=True,
                     timeout=60,
-                    cwd=temp_dir
+                    cwd=build_cwd
                 )
-            duration = int((time.time() - start_time) * 1000)
+                duration = int((time.time() - start_time) * 1000)
+                
+                results.append({
+                    "command": cmd,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "exit_code": result.returncode,
+                    "duration_ms": duration
+                })
+                
+            except subprocess.TimeoutExpired:
+                results.append({
+                    "command": cmd,
+                    "stdout": "",
+                    "stderr": "Command timed out after 60 seconds",
+                    "exit_code": -1,
+                    "duration_ms": 60000
+                })
+            except Exception as e:
+                results.append({
+                    "command": cmd,
+                    "stdout": "",
+                    "stderr": f"Failed to run command: {str(e)}",
+                    "exit_code": -1,
+                    "duration_ms": 0
+                })
+        
+        return results
+    
+    def _execute_compose_commands(self, temp_dir: str, file_paths: Dict[str, str] = None) -> List[Dict[str, Any]]:
+        """Execute docker-compose commands"""
+        results = []
+        
+        compose_dirs = [""]
+        if file_paths:
+            found_dirs = set()
+            for rel_path in file_paths.keys():
+                if os.path.basename(rel_path) in ('docker-compose.yml', 'docker-compose.yaml'):
+                    found_dirs.add(os.path.dirname(rel_path))
+            if found_dirs:
+                compose_dirs = sorted(list(found_dirs))
+
+        for rel_dir in compose_dirs:
+            compose_cwd = os.path.join(temp_dir, rel_dir) if rel_dir else temp_dir
+            cmd = f"{self.docker_command} compose config"
             
-            results.append({
-                "command": cmd,
-                "stdout": result.stdout,
-                "stderr": result.stderr,
-                "exit_code": result.returncode,
-                "duration_ms": duration
-            })
-            
-        except subprocess.TimeoutExpired:
-            results.append({
-                "command": cmd,
-                "stdout": "",
-                "stderr": "Command timed out after 60 seconds",
-                "exit_code": -1,
-                "duration_ms": 60000
-            })
-        except Exception as e:
-            results.append({
-                "command": cmd,
-                "stdout": "",
-                "stderr": f"Failed to run command: {str(e)}",
-                "exit_code": -1,
-                "duration_ms": 0
-            })
+            try:
+                start_time = time.time()
+                result = subprocess.run(
+                    cmd,
+                    shell=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=60,
+                    cwd=compose_cwd
+                )
+                # If docker compose is not recognized, try docker-compose
+                if result.returncode != 0 and ("not a docker command" in result.stderr or "is not a docker command" in result.stderr):
+                    cmd = f"{self.docker_command}-compose config"
+                    result = subprocess.run(
+                        cmd,
+                        shell=True,
+                        capture_output=True,
+                        text=True,
+                        timeout=60,
+                        cwd=compose_cwd
+                    )
+                duration = int((time.time() - start_time) * 1000)
+                
+                results.append({
+                    "command": cmd,
+                    "stdout": result.stdout,
+                    "stderr": result.stderr,
+                    "exit_code": result.returncode,
+                    "duration_ms": duration
+                })
+                
+            except subprocess.TimeoutExpired:
+                results.append({
+                    "command": cmd,
+                    "stdout": "",
+                    "stderr": "Command timed out after 60 seconds",
+                    "exit_code": -1,
+                    "duration_ms": 60000
+                })
+            except Exception as e:
+                results.append({
+                    "command": cmd,
+                    "stdout": "",
+                    "stderr": f"Failed to run command: {str(e)}",
+                    "exit_code": -1,
+                    "duration_ms": 0
+                })
         
         return results
     

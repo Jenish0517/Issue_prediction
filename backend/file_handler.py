@@ -23,6 +23,13 @@ class FileHandler:
             with zipfile.ZipFile(zip_file_path, 'r') as zip_ref:
                 zip_ref.extractall(self.temp_dir)
             
+            # Unwrap single top-level directory if present (e.g., zip created with root wrapper folder)
+            entries = [e for e in os.listdir(self.temp_dir) if e not in SKIP_DIRS and not e.startswith('__MACOSX') and not e.startswith('.')]
+            if len(entries) == 1:
+                single_dir = os.path.join(self.temp_dir, entries[0])
+                if os.path.isdir(single_dir):
+                    self.temp_dir = single_dir
+
             # Analyze extracted files
             project_info = self._analyze_project(self.temp_dir)
             
